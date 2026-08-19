@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>AR Treasure Hunt</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #000;
+    }
+
+    #camera {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(
+        rgba(0, 0, 0, 0.35),
+        transparent 30%,
+        transparent 70%,
+        rgba(0, 0, 0, 0.45)
+      );
+    }
+
+    #startScreen, #winScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 25px;
+      color: white;
+      background: radial-gradient(circle, #263238, #000);
+    }
+
+    #winScreen {
+      display: none;
+      background: rgba(0, 0, 0, 0.92);
+    }
+
+    button {
+      border: 0;
+      border-radius: 30px;
+      padding: 15px 30px;
+      margin-top: 15px;
+      font-size: 17px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .top-panel {
+      position: fixed;
+      top: 15px;
+      left: 50%;
+      z-index: 10;
+      width: 92%;
+      max-width: 500px;
+      padding: 15px;
+      transform: translateX(-50%);
+      border-radius: 18px;
+      text-align: center;
+      color: white;
+      background: rgba(0, 0, 0, 0.65);
+    }
+
+    .stats {
+      display: flex;
+      justify-content: space-around;
+      font-weight: bold;
+    }
+
+    .scanner {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      z-index: 5;
+      width: 120px;
+      height: 120px;
+      transform: translate(-50%, -50%);
+      border: 3px solid rgba(255, 255, 255, 0.8);
+      border-radius: 50%;
+      pointer-events: none;
+    }
+
+    .treasure {
+      position: fixed;
+      z-index: 8;
+      width: 75px;
+      height: 75px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border: 4px solid white;
+      border-radius: 50%;
+      background: rgba(255, 193, 7, 0.9);
+      box-shadow: 0 0 15px #fff, 0 0 35px #ffd54f;
+      font-size: 42px;
+      cursor: pointer;
+      user-select: none;
+      transition: left 1.2s ease, top 1.2s ease;
+      animation: float 1.5s infinite alternate;
+    }
+
+    @keyframes float {
+      from { transform: translateY(0) scale(1); }
+      to { transform: translateY(-12px) scale(1.08); }
+    }
+
+    #message {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      z-index: 10;
+      width: 90%;
+      max-width: 450px;
+      padding: 14px;
+      transform: translateX(-50%);
+      border-radius: 15px;
+      text-align: center;
+      color: white;
+      background: rgba(0, 0, 0, 0.7);
+    }
+  </style>
+</head>
+
+<body>
+  <video id="camera" autoplay playsinline></video>
+  <div class="overlay"></div>
+
+  <div id="startScreen">
+    <div style="font-size:70px">🗺️</div>
+    <h1>AR Treasure Hunt</h1>
+    <p>Find and tap all moving coins using your phone camera.</p>
+    <button onclick="startGame()">📷 Start Hunt</button>
+  </div>
+
+  <div class="top-panel">
+    <h2>💎 AR Treasure Hunt</h2>
+    <div class="stats">
+      <div>💎 Found: <span id="found">0</span></div>
+      <div>⭐ Score: <span id="score">0</span></div>
+    </div>
+  </div>
+
+  <div class="scanner"></div>
+  <div id="message">🔎 Press Start Hunt to begin.</div>
+
+  <div id="winScreen">
+    <div style="font-size:80px">🏆</div>
+    <h1>You Win!</h1>
+    <p>You found all the coins.</p>
+    <p>Final Score: <strong id="finalScore">0</strong></p>
+    <button onclick="location.reload()">🔄 Play Again</button>
+  </div>
+
+  <script>
+    const camera = document.getElementById("camera");
+    const foundText = document.getElementById("found");
+    const scoreText = document.getElementById("score");
+    const message = document.getElementById("message");
+    const startScreen = document.getElementById("startScreen");
+    const winScreen = document.getElementById("winScreen");
+    const finalScore = document.getElementById("finalScore");
+
+    let found = 0;
+    let score = 0;
+    const totalCoins = 5;
+
+    async function startGame() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false
+        });
+
+        camera.srcObject = stream;
+        startScreen.style.display = "none";
+        message.textContent = "🔎 Coins move every 3 seconds — tap them!";
+        createCoins();
+      } catch (error) {
+        alert("Camera permission is required. Please allow camera access and try again.");
+        console.error(error);
+      }
+    }
+
+    function createCoins() {
+      for (let i = 0; i < totalCoins; i++) {
+        const coin = document.createElement("div");
+        coin.className = "treasure";
+        coin.textContent = "🪙";
+        coin.dataset.collected = "false";
+
+        moveCoin(coin);
+
+        coin.addEventListener("click", () => collectCoin(coin));
+        document.body.appendChild(coin);
+
+        setInterval(() => {
+          if (coin.dataset.collected === "false") {
+            moveCoin(coin);
+          }
+        }, 3000);
+      }
+    }
+
+    function moveCoin(coin) {
+      // Places coins around the screen, avoiding the centre area.
+      let x = Math.random() * 80 + 5;
+      let y = Math.random() * 70 + 15;
+
+      if (x > 35 && x < 65 && y > 35 && y < 65) {
+        x = x < 50 ? 15 : 75;
+      }
+
+      coin.style.left = x + "%";
+      coin.style.top = y + "%";
+    }
+
+    function collectCoin(coin) {
+      if (coin.dataset.collected === "true") return;
+
+      coin.dataset.collected = "true";
+      coin.remove();
+
+      found++;
+      score += 100;
+      foundText.textContent = found;
+      scoreText.textContent = score;
+      message.textContent = "🎉 Coin found! +100 points";
+
+      if (found === totalCoins) {
+        finalScore.textContent = score;
+        winScreen.style.display = "flex";
+
+        if (camera.srcObject) {
+          camera.srcObject.getTracks().forEach(track => track.stop());
+        }
+      }
+    }
+  </script>
+</body>
+</html>
